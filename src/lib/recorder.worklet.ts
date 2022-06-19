@@ -1,30 +1,45 @@
-const bufferSize = 8192;
-const bitsPerSample = 24;
-const scaleFactor = Math.pow(2, bitsPerSample) / 2;
+function assert(cond: any): asserts cond {
+  if (!cond) {
+    throw new Error("assertion failed");
+  }
+}
 
 class RecorderProcessor
   extends AudioWorkletProcessor
   implements AudioWorkletProcessorImpl
 {
   dataPort?: MessagePort;
-  buffer = new Int32Array(bufferSize);
+  data?: Int32Array[];
+  bufferSize = 0;
   offset = 0;
+  scaleFactor = 1;
 
   constructor() {
     super();
     this.port.onmessage = (e) => {
-      console.log(e.data);
-      switch (e.data.eventType) {
-        case "dataPort":
+      const msg = e.data;
+      switch (msg.type) {
+        case "start":
+          console.log("Starting to record");
           this.dataPort = e.ports[0];
+          this.bufferSize = msg.bufferSize;
+          this.offset = 0;
+          this.scaleFactor = Math.pow(2, msg.bitsPerSample) / 2;
           break;
         case "stop":
-          this.dataPort?.postMessage({
-            eventType: "end",
-            buffer: this.buffer.slice(0, this.offset),
-          });
+          console.log("Stopping to record");
+          assert(this.dataPort);
+          assert(this.data);
+          this.dataPort.postMessage(
+            {
+              type: "end",
+              data: this.data.map((array) => array.slice(0, this.offset)),
+            },
+            this.data.map((array) => array.buffer)
+          );
           this.dataPort = undefined;
-          this.port.postMessage({ eventType: "done" });
+          this.data = undefined;
+          this.port.postMessage({ type: "done" });
           break;
       }
     };
@@ -39,27 +54,36 @@ class RecorderProcessor
       return true;
     }
 
-    let channel = inputs[0][0];
+    let input = inputs[0];
+    let channels = input.length;
+    let samples = input[0].length;
+
+    if (!this.data) {
+      this.data = Array.from(
+        { length: channels },
+        () => new Int32Array(this.bufferSize)
+      );
+    }
+
     let i = 0;
-    while (i < channel.length) {
-      for (; i < channel.length && this.offset + i < this.buffer.length; i++) {
-        this.buffer[this.offset + i] =
-          channel[i] * (scaleFactor - (channel[i] < 0 ? 0 : 1));
+    while (i < samples) {
+      for (; i < samples && this.offset + i < this.bufferSize; i++) {
+        for (let channel = 0; channel < channels; channel++) {
+          this.data[channel][this.offset + i] =
+            input[channel][i] *
+            (this.scaleFactor - (input[channel][i] < 0 ? 0 : 1));
+        }
       }
-      if (this.offset + i >= this.buffer.length) {
-        this.flush();
-        this.offset -= this.buffer.length;
+      if (this.offset + i >= this.bufferSize) {
+        this.dataPort.postMessage({
+          type: "data",
+          data: this.data,
+        });
+        this.offset -= this.bufferSize;
       }
     }
     this.offset += i;
     return true;
-  }
-
-  flush() {
-    this.dataPort?.postMessage({
-      eventType: "data",
-      buffer: this.buffer,
-    });
   }
 }
 

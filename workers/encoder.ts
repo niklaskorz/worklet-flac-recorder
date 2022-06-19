@@ -4,36 +4,51 @@ import { exportFlacFile } from "libflacjs/src/utils";
 
 const flacReady = new Promise((resolve, reject) => Flac.on("ready", resolve));
 
-console.log("Worker loaded, waiting for recorder");
+console.log("Worker loaded, waiting for recording to start");
 
 function assert(cond: any): asserts cond {
-    if (!cond) {
-        throw new Error("assertion failed");
-    }
+  if (!cond) {
+    throw new Error("assertion failed");
+  }
 }
 
-async function recorderChanged(dataPort: MessagePort, sampleRate: number) {
+interface StartMessage {
+  type: "start";
+  sampleRate: number;
+  bitsPerSample: number;
+  channels: number;
+  compression: Flac.CompressionLevel;
+}
+
+async function start(
+  { sampleRate, bitsPerSample, channels, compression }: StartMessage,
+  dataPort: MessagePort
+) {
   console.log("Waiting on Flac");
   await flacReady;
-  console.log("Flac ready");
+  console.log("Encoder running");
 
-  const encoder = new Encoder(Flac, {
-    sampleRate, // number, e.g. 44100
-    channels: 1, // number, e.g. 1 (mono), 2 (stereo), ...
-    bitsPerSample: 24, // number, e.g. 8 or 16 or 24
-    compression: 4, // number, value between [0, 8] from low to high compression
-    verify: true, // boolean (OPTIONAL)
-    isOgg: false, // boolean (OPTIONAL), if encoded FLAC should be wrapped in OGG container
-  });
-
+  let encoder: Encoder | undefined;
   dataPort.onmessage = (e) => {
-    switch (e.data.eventType) {
+    const msg = e.data;
+    switch (msg.type) {
       case "data":
-        assert(encoder.encode([e.data.buffer]));
+        if (!encoder) {
+          encoder = new Encoder(Flac, {
+            sampleRate, // number, e.g. 44100
+            channels: msg.data.length, // number, e.g. 1 (mono), 2 (stereo), ...
+            bitsPerSample, // number, e.g. 8 or 16 or 24
+            compression, // number, value between [0, 8] from low to high compression
+            verify: true, // boolean (OPTIONAL)
+            isOgg: false, // boolean (OPTIONAL), if encoded FLAC should be wrapped in OGG container
+          });
+        }
+        assert(encoder.encode(msg.data));
         break;
       case "end":
-        if (e.data.buffer.length) {
-            assert(encoder.encode([e.data.buffer]));
+        assert(encoder);
+        if (msg.data[0].length) {
+          assert(encoder.encode(msg.data));
         }
         assert(encoder.encode());
         const samples = encoder.getSamples();
@@ -41,15 +56,14 @@ async function recorderChanged(dataPort: MessagePort, sampleRate: number) {
         assert(metadata);
         encoder.destroy();
         const blob = exportFlacFile([samples], metadata, false);
-        console.log({ metadata, blob });
-        postMessage({ eventType: "done", blob })
+        postMessage({ type: "done", blob });
         break;
     }
   };
 }
 
 addEventListener("message", (e) => {
-  if (e.data.eventType === "recorderChanged") {
-    recorderChanged(e.ports[0], e.data.sampleRate);
+  if (e.data.type === "start") {
+    start(e.data, e.ports[0]);
   }
 });
