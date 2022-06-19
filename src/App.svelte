@@ -9,7 +9,7 @@
   let recorder: AudioWorkletNode;
   let audioSrc: string | undefined;
 
-  const encoder = new Worker("/workers/encoder.js");
+  const encoder = new Worker(import.meta.env.BASE_URL + "workers/encoder.js");
   encoder.addEventListener("message", (e) => {
     if (e.data.type === "done") {
       console.log("Encoding complete");
@@ -18,7 +18,7 @@
   });
 
   async function load() {
-    await context.audioWorklet.addModule("/workers/recorder.worklet.js");
+    await context.audioWorklet.addModule(import.meta.env.BASE_URL + "workers/recorder.worklet.js");
     recorder = new AudioWorkletNode(context, "recorder");
     recorder.port.onmessage = (e) => {
       if (e.data.type === "done") {
