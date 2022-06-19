@@ -19,7 +19,7 @@ jobs:
       - name: Linting and type checking
         run: npm run check
       - name: Build project
-        run: npm run build
+        run: npm run build -- --base=/worklet-flac-recorder/
       - name: Publish
         uses: peaceiris/actions-gh-pages@v3
         with:
