@@ -88,5 +88,3 @@ class RecorderProcessor
 }
 
 registerProcessor("recorder", RecorderProcessor);
-
-export {};

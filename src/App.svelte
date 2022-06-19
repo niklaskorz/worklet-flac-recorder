@@ -18,9 +18,7 @@
   });
 
   async function load() {
-    await context.audioWorklet.addModule(
-      new URL("./lib/recorder.worklet.ts", import.meta.url)
-    );
+    await context.audioWorklet.addModule("/workers/recorder.worklet.js");
     recorder = new AudioWorkletNode(context, "recorder");
     recorder.port.onmessage = (e) => {
       if (e.data.type === "done") {

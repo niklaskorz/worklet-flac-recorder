@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build-workers && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "build-workers": "esbuild workers/encoder.ts --bundle --format=iife --target=es2020 --outfile=public/workers/encoder.js"
+    "build-workers": "npm run build-encoder && npm run build-recorder",
+    "build-encoder": "esbuild workers/encoder.ts --bundle --format=iife --target=es2020 --outfile=public/workers/encoder.js",
+    "build-recorder": "esbuild workers/recorder.worklet.ts --bundle --format=iife --target=es2020 --outfile=public/workers/recorder.worklet.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^1.0.0-next.30",
