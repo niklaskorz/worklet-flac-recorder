@@ -35,7 +35,7 @@ class RecorderProcessor
               type: "end",
               data: this.data.map((array) => array.slice(0, this.offset)),
             },
-            this.data.map((array) => array.buffer)
+            this.data.map((array) => array.buffer),
           );
           this.dataPort = undefined;
           this.data = undefined;
@@ -48,7 +48,7 @@ class RecorderProcessor
   process(
     inputs: Float32Array[][],
     outputs: Float32Array[][],
-    parameters: Record<string, Float32Array>
+    parameters: Record<string, Float32Array>,
   ): boolean {
     if (!this.dataPort) {
       return true;
@@ -61,28 +61,30 @@ class RecorderProcessor
     if (!this.data) {
       this.data = Array.from(
         { length: channels },
-        () => new Int32Array(this.bufferSize)
+        () => new Int32Array(this.bufferSize),
       );
     }
 
-    let i = 0;
-    while (i < samples) {
-      for (; i < samples && this.offset + i < this.bufferSize; i++) {
-        for (let channel = 0; channel < channels; channel++) {
-          this.data[channel][this.offset + i] =
-            input[channel][i] *
-            (this.scaleFactor - (input[channel][i] < 0 ? 0 : 1));
+    let start = 0;
+    while (start < samples) {
+      const end = Math.min(samples, start + this.bufferSize - this.offset);
+      for (let ch = 0; ch < channels; ch++) {
+        for (let i = start; i < end; i++) {
+          this.data[ch][this.offset + i] =
+            input[ch][i] * (this.scaleFactor - (input[ch][i] < 0 ? 0 : 1));
         }
       }
-      if (this.offset + i >= this.bufferSize) {
+      this.offset += end - start;
+      if (this.offset >= this.bufferSize) {
         this.dataPort.postMessage({
           type: "data",
           data: this.data,
         });
-        this.offset -= this.bufferSize;
+        this.offset = 0;
       }
+      start = end;
     }
-    this.offset += i;
+
     return true;
   }
 }

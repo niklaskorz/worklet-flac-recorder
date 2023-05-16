@@ -3,10 +3,14 @@
   const bitsPerSample = 24;
   const bufferSize = 8192;
   const compression = 5;
+  let autoGainControl = true;
+  let echoCancellation = true;
+  let noiseSuppression = true;
   let ready = false;
   let recording = false;
   let context = new AudioContext();
   let recorder: AudioWorkletNode;
+  let stream: MediaStream;
   let audioSrc: string | undefined;
 
   const encoder = new Worker(import.meta.env.BASE_URL + "workers/encoder.js");
@@ -35,7 +39,14 @@
       audio.play();
       source = context.createMediaElementSource(audio);
     } else {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl,
+          echoCancellation,
+          noiseSuppression,
+        },
+        video: false,
+      });
       source = context.createMediaStreamSource(stream);
     }
     source.connect(recorder);
@@ -43,6 +54,20 @@
     ready = true;
   }
   load();
+
+  $: if (ready && !useDebugAudio) {
+    console.log("Reconfiguring audio:", {
+      autoGainControl,
+      echoCancellation,
+      noiseSuppression,
+    })
+    const track = stream.getAudioTracks()[0]
+    track.applyConstraints({
+      autoGainControl,
+      echoCancellation,
+      noiseSuppression,
+    });
+  }
 
   async function start() {
     const dataChannel = new MessageChannel();
@@ -74,7 +99,21 @@
       Sample rate: {context.sampleRate}<br>
       Bits per sample: {bitsPerSample}<br>
       Buffer size: {bufferSize}<br>
-      Compression level: {compression}
+      Compression level: {compression}<br>
+      <label>
+        <input type="checkbox" bind:checked={autoGainControl}>
+        Auto gain control
+      </label>
+      <br>
+      <label>
+        <input type="checkbox" bind:checked={echoCancellation}>
+        Echo cancellation
+      </label>
+      <br>
+      <label>
+        <input type="checkbox" bind:checked={noiseSuppression}>
+        Noise suppression
+      </label>
     </p>
     <p>
       {#if recording}
